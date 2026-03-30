@@ -32,11 +32,13 @@ export interface SharedObjectState {
 
 export interface PeerSnapshot {
   peerId: string;
+  avatarColor: number;
   pose: AvatarPoseState | null;
 }
 
 export interface HelloMessage {
   type: "hello";
+  avatarColor: number;
 }
 
 export interface WelcomeMessage {
@@ -49,6 +51,7 @@ export interface WelcomeMessage {
 export interface PeerJoinedMessage {
   type: "peer-joined";
   peerId: string;
+  avatarColor: number;
 }
 
 export interface PeerLeftMessage {

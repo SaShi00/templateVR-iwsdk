@@ -10,6 +10,8 @@ import {
 import {
   applyRemoteAvatarPose,
   createRemoteAvatar,
+  getLocalAvatarColor,
+  setRemoteAvatarColor,
   type RemoteAvatarVisual,
 } from "./createUserAvatar";
 import {
@@ -22,9 +24,9 @@ import {
   type TransformSnapshot,
 } from "./multiplayerProtocol";
 
-const AVATAR_SYNC_INTERVAL_MS = 50;
-const OBJECT_RELEASE_IDLE_MS = 180;
-const REMOTE_AVATAR_LERP = 0.35;
+const AVATAR_SYNC_INTERVAL_MS = 33;
+const OBJECT_SYNC_INTERVAL_MS = 33;
+const REMOTE_AVATAR_LERP = 0.6;
 const POSITION_EPSILON = 0.001;
 const QUATERNION_EPSILON = 0.001;
 const SCALE_EPSILON = 0.001;
@@ -71,6 +73,7 @@ interface TrackedSharedObject extends NetworkedSharedObject {
   locallyOwned: boolean;
   localSequence: number;
   lastAppliedSequence: number;
+  lastSentAt: number;
   lastObservedTransform: TransformSnapshot;
   lastSentTransform: TransformSnapshot | null;
   lastRemoteState: SharedObjectState | null;
@@ -78,6 +81,7 @@ interface TrackedSharedObject extends NetworkedSharedObject {
 }
 
 interface RemotePeerState {
+  avatarColor: number;
   visual: RemoteAvatarVisual;
   targetPose: AvatarPoseState;
   lastSequence: number;
@@ -115,6 +119,7 @@ class MultiplayerManager {
         locallyOwned: false,
         localSequence: 0,
         lastAppliedSequence: 0,
+        lastSentAt: 0,
         lastObservedTransform: this.readLocalTransform(sharedObject.object),
         lastSentTransform: null,
         lastRemoteState: null,
@@ -156,7 +161,10 @@ class MultiplayerManager {
 
     socket.addEventListener("open", () => {
       this.socket = socket;
-      this.send({ type: "hello" });
+      this.send({
+        type: "hello",
+        avatarColor: getLocalAvatarColor(this.world),
+      });
     });
 
     socket.addEventListener("message", (event) => {
@@ -240,10 +248,18 @@ class MultiplayerManager {
 
         for (const peer of message.peers) {
           if (!peer.pose) {
+            if (!this.remotePeers.has(peer.peerId)) {
+              this.remotePeers.set(peer.peerId, {
+                avatarColor: peer.avatarColor,
+                visual: this.createVisualForPeer(peer.peerId, peer.avatarColor),
+                targetPose: this.createLocalAvatarPose(Date.now()),
+                lastSequence: -1,
+              });
+            }
             continue;
           }
 
-          this.updateRemotePeerPose(peer.peerId, peer.pose);
+          this.updateRemotePeerPose(peer.peerId, peer.pose, peer.avatarColor);
         }
 
         for (const objectState of message.objects) {
@@ -257,10 +273,12 @@ class MultiplayerManager {
           message.peerId !== this.selfPeerId &&
           !this.remotePeers.has(message.peerId)
         ) {
-          const visual = createRemoteAvatar(this.world);
-          visual.root.name = `remote-peer-${message.peerId}`;
           this.remotePeers.set(message.peerId, {
-            visual,
+            avatarColor: message.avatarColor,
+            visual: this.createVisualForPeer(
+              message.peerId,
+              message.avatarColor,
+            ),
             targetPose: this.createLocalAvatarPose(Date.now()),
             lastSequence: -1,
           });
@@ -332,18 +350,27 @@ class MultiplayerManager {
     this.remotePeers.delete(peerId);
   }
 
-  private updateRemotePeerPose(peerId: string, pose: AvatarPoseState): void {
+  private updateRemotePeerPose(
+    peerId: string,
+    pose: AvatarPoseState,
+    avatarColor?: number,
+  ): void {
     let remotePeer = this.remotePeers.get(peerId);
 
     if (!remotePeer) {
-      const visual = createRemoteAvatar(this.world);
-      visual.root.name = `remote-peer-${peerId}`;
       remotePeer = {
-        visual,
+        avatarColor: avatarColor ?? 0x3f7cff,
+        visual: this.createVisualForPeer(peerId, avatarColor ?? 0x3f7cff),
         targetPose: pose,
         lastSequence: -1,
       };
       this.remotePeers.set(peerId, remotePeer);
+    } else if (
+      avatarColor !== undefined &&
+      avatarColor !== remotePeer.avatarColor
+    ) {
+      remotePeer.avatarColor = avatarColor;
+      setRemoteAvatarColor(remotePeer.visual, avatarColor);
     }
 
     if (pose.sequence <= remotePeer.lastSequence) {
@@ -352,6 +379,18 @@ class MultiplayerManager {
 
     remotePeer.targetPose = pose;
     remotePeer.lastSequence = pose.sequence;
+  }
+
+  private createVisualForPeer(
+    peerId: string,
+    avatarColor: number,
+  ): RemoteAvatarVisual {
+    const visual = createRemoteAvatar(this.world);
+
+    visual.root.name = `remote-peer-${peerId}`;
+    setRemoteAvatarColor(visual, avatarColor);
+
+    return visual;
   }
 
   private publishLocalAvatar(now: number): void {
@@ -408,14 +447,18 @@ class MultiplayerManager {
         continue;
       }
 
-      if (!changed) {
+      if (trackedObject.locallyOwned) {
         if (
-          trackedObject.locallyOwned &&
-          now - trackedObject.lastLocalActivityAt > OBJECT_RELEASE_IDLE_MS
+          changed ||
+          now - trackedObject.lastSentAt >= OBJECT_SYNC_INTERVAL_MS
         ) {
-          this.releaseObject(trackedObject, now);
+          this.sendTrackedObjectState(trackedObject, currentTransform, now);
         }
 
+        continue;
+      }
+
+      if (!changed) {
         continue;
       }
 
@@ -425,26 +468,7 @@ class MultiplayerManager {
         continue;
       }
 
-      if (
-        trackedObject.lastSentTransform &&
-        transformsEqual(currentTransform, trackedObject.lastSentTransform)
-      ) {
-        continue;
-      }
-
-      trackedObject.localSequence += 1;
-      trackedObject.lastSentTransform = cloneTransform(currentTransform);
-
-      this.send({
-        type: "object-state",
-        state: {
-          objectId: trackedObject.id,
-          active: trackedObject.locallyOwned,
-          transform: currentTransform,
-          sequence: trackedObject.localSequence,
-          timestamp: now,
-        },
-      });
+      this.sendTrackedObjectState(trackedObject, currentTransform, now);
     }
   }
 
@@ -504,6 +528,35 @@ class MultiplayerManager {
       type: "object-release",
       objectId: trackedObject.id,
       timestamp: now,
+    });
+  }
+
+  private sendTrackedObjectState(
+    trackedObject: TrackedSharedObject,
+    transform: TransformSnapshot,
+    now: number,
+  ): void {
+    if (
+      trackedObject.lastSentTransform &&
+      transformsEqual(transform, trackedObject.lastSentTransform) &&
+      now - trackedObject.lastSentAt < OBJECT_SYNC_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    trackedObject.localSequence += 1;
+    trackedObject.lastSentAt = now;
+    trackedObject.lastSentTransform = cloneTransform(transform);
+
+    this.send({
+      type: "object-state",
+      state: {
+        objectId: trackedObject.id,
+        active: trackedObject.locallyOwned,
+        transform,
+        sequence: trackedObject.localSequence,
+        timestamp: now,
+      },
     });
   }
 

@@ -17,6 +17,7 @@ import {
 
 interface ConnectedPeer {
   peerId: string;
+  avatarColor: number;
   socket: WebSocket;
   pose: AvatarPoseState | null;
 }
@@ -55,6 +56,7 @@ const getPeerSnapshots = (excludedPeerId: string): PeerSnapshot[] =>
     .filter((peer) => peer.peerId !== excludedPeerId)
     .map((peer) => ({
       peerId: peer.peerId,
+      avatarColor: peer.avatarColor,
       pose: peer.pose,
     }));
 
@@ -131,6 +133,7 @@ server.on("connection", (socket) => {
       peerId = randomUUID();
       peers.set(peerId, {
         peerId,
+        avatarColor: message.avatarColor,
         socket,
         pose: null,
       });
@@ -142,7 +145,10 @@ server.on("connection", (socket) => {
         objects: [...objectStates.values()],
       });
 
-      broadcastMessage({ type: "peer-joined", peerId }, peerId);
+      broadcastMessage(
+        { type: "peer-joined", peerId, avatarColor: message.avatarColor },
+        peerId,
+      );
       return;
     }
 
