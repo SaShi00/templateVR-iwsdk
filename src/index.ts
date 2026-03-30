@@ -23,6 +23,7 @@ import {
 import { EnvironmentType, LocomotionEnvironment } from "@iwsdk/core";
 
 import { createPointingArrow } from "./createPointingArrow";
+import { createUserAvatar } from "./createUserAvatar";
 import { enforceUniformScale } from "./enforceUniformScale";
 
 const assets: AssetManifest = {
@@ -59,6 +60,8 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
 
   camera.position.set(-4, 1.5, -6);
   camera.rotateY(-Math.PI * 0.75);
+
+  createUserAvatar(world);
 
   const { scene: envMesh } = AssetManager.getGLTF("environmentDesk")!;
   envMesh.rotateY(Math.PI);
