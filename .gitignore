@@ -64,3 +64,6 @@ coverage/
 public/gltf/generated/
 public/glxf/
 public/ui/
+
+model-machine.glb
+model-pile.glb

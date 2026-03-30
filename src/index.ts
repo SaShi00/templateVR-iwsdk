@@ -1,11 +1,11 @@
 import {
   AssetManifest,
   AssetType,
+  CanvasTexture,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   SessionMode,
-  SRGBColorSpace,
   AssetManager,
   World,
 } from "@iwsdk/core";
@@ -27,13 +27,45 @@ import { createUserAvatar } from "./createUserAvatar";
 import { enableMultiplayer } from "./enableMultiplayer";
 import { enforceUniformScale } from "./enforceUniformScale";
 
-const assets: AssetManifest = {
-  environmentDesk: {
-    url: "./gltf/environmentDesk/environmentDesk.gltf",
-    type: AssetType.GLTF,
-    priority: "critical",
-  },
+const createFloorGridTexture = (): CanvasTexture => {
+  const canvas = document.createElement("canvas");
+  const size = 1024;
+  const divisions = 20;
+  const step = size / divisions;
+  const context = canvas.getContext("2d");
 
+  canvas.width = size;
+  canvas.height = size;
+
+  if (!context) {
+    throw new Error("Failed to create floor grid texture");
+  }
+
+  context.fillStyle = "#c8c2b5";
+  context.fillRect(0, 0, size, size);
+
+  for (let index = 0; index <= divisions; index += 1) {
+    const offset = Math.round(index * step);
+    const isMajorLine = index % 5 === 0;
+
+    context.strokeStyle = isMajorLine ? "#7b766d" : "#9c968b";
+    context.lineWidth = isMajorLine ? 3 : 1;
+
+    context.beginPath();
+    context.moveTo(offset, 0);
+    context.lineTo(offset, size);
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(0, offset);
+    context.lineTo(size, offset);
+    context.stroke();
+  }
+
+  return new CanvasTexture(canvas);
+};
+
+const assets: AssetManifest = {
   model: {
     url: "./model.glb",
     type: AssetType.GLTF,
@@ -64,11 +96,18 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
 
   createUserAvatar(world);
 
-  const { scene: envMesh } = AssetManager.getGLTF("environmentDesk")!;
-  envMesh.rotateY(Math.PI);
-  envMesh.position.set(0, -0.1, 0);
+  const floorTexture = createFloorGridTexture();
+
+  const floorMesh = new Mesh(
+    new PlaneGeometry(40, 40),
+    new MeshBasicMaterial({ map: floorTexture }),
+  );
+  floorMesh.name = "ground-floor";
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.y = 0;
+
   world
-    .createTransformEntity(envMesh)
+    .createTransformEntity(floorMesh)
     .addComponent(LocomotionEnvironment, { type: EnvironmentType.STATIC });
 
   const { scene: modelMesh } = AssetManager.getGLTF("model")!;
