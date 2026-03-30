@@ -9,9 +9,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["node"]
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "server/**/*.ts"
   ]
 }

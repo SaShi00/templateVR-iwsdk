@@ -4,6 +4,11 @@ import { compileUIKit } from "@iwsdk/vite-plugin-uikitml";
 import { defineConfig } from "vite";
 import mkcert from "vite-plugin-mkcert";
 
+import {
+  MULTIPLAYER_PATH,
+  MULTIPLAYER_SERVER_PORT,
+} from "./src/multiplayerProtocol";
+
 export default defineConfig({
   plugins: [
     mkcert(),
@@ -17,7 +22,17 @@ export default defineConfig({
 
     compileUIKit({ sourceDir: "ui", outputDir: "public/ui", verbose: true }),
   ],
-  server: { host: "0.0.0.0", port: 8081, open: true },
+  server: {
+    host: "0.0.0.0",
+    port: 8081,
+    open: true,
+    proxy: {
+      [MULTIPLAYER_PATH]: {
+        target: `ws://127.0.0.1:${MULTIPLAYER_SERVER_PORT}`,
+        ws: true,
+      },
+    },
+  },
   build: {
     outDir: "dist",
     sourcemap: process.env.NODE_ENV !== "production",

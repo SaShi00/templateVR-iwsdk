@@ -10,6 +10,11 @@ import {
 const ARROW_IDLE_COLOR = 0xff0000;
 const ARROW_ACTIVE_COLOR = 0x0000ff;
 
+export interface PointingArrowController {
+  root: Object3D;
+  setActive: (active: boolean) => void;
+}
+
 const setArrowColor = (object: Object3D, colorHex: number): void => {
   object.traverse((child) => {
     if (!(child instanceof Mesh)) {
@@ -48,20 +53,38 @@ const createArrowVisual = (): Object3D => {
   return root;
 };
 
-export function createPointingArrow(): Object3D {
+export function createPointingArrow(): PointingArrowController {
   const arrow = createArrowVisual();
+  let pointerActive = false;
+  let externalActive = false;
+
+  const syncColor = (): void => {
+    setArrowColor(
+      arrow,
+      pointerActive || externalActive ? ARROW_ACTIVE_COLOR : ARROW_IDLE_COLOR,
+    );
+  };
 
   arrow.addEventListener("pointerdown", () => {
-    setArrowColor(arrow, ARROW_ACTIVE_COLOR);
+    pointerActive = true;
+    syncColor();
   });
 
   arrow.addEventListener("pointerup", () => {
-    setArrowColor(arrow, ARROW_IDLE_COLOR);
+    pointerActive = false;
+    syncColor();
   });
 
   arrow.addEventListener("pointercancel", () => {
-    setArrowColor(arrow, ARROW_IDLE_COLOR);
+    pointerActive = false;
+    syncColor();
   });
 
-  return arrow;
+  return {
+    root: arrow,
+    setActive(active: boolean): void {
+      externalActive = active;
+      syncColor();
+    },
+  };
 }
