@@ -22,6 +22,7 @@ import {
 
 import { EnvironmentType, LocomotionEnvironment } from "@iwsdk/core";
 
+import { createPointingArrow } from "./createPointingArrow";
 import { enforceUniformScale } from "./enforceUniformScale";
 
 const assets: AssetManifest = {
@@ -73,5 +74,14 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
 
   world.createTransformEntity(modelMesh).addComponent(DistanceGrabbable, {
     movementMode: MovementMode.MoveFromTarget,
+  });
+
+  const arrowMesh = createPointingArrow();
+  arrowMesh.position.set(-1.3, 1, -2);
+
+  world.createTransformEntity(arrowMesh).addComponent(DistanceGrabbable, {
+    movementMode: MovementMode.MoveFromTarget,
+    rotate: true,
+    scale: true,
   });
 });
