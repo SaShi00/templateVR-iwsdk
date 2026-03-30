@@ -22,6 +22,8 @@ import {
 
 import { EnvironmentType, LocomotionEnvironment } from "@iwsdk/core";
 
+import { enforceUniformScale } from "./enforceUniformScale";
+
 const assets: AssetManifest = {
   environmentDesk: {
     url: "./gltf/environmentDesk/environmentDesk.gltf",
@@ -66,7 +68,8 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
 
   const { scene: modelMesh } = AssetManager.getGLTF("model")!;
 
-  modelMesh.position.set(1.2, 0.85, -1.8);
+  modelMesh.position.set(0, 1.5, -1.8);
+  enforceUniformScale(world, modelMesh);
 
   world.createTransformEntity(modelMesh).addComponent(DistanceGrabbable, {
     movementMode: MovementMode.MoveFromTarget,
