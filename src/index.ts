@@ -8,6 +8,7 @@ import {
   PlaneGeometry,
   SessionMode,
   AssetManager,
+  VisibilityState,
   World,
   createSystem,
 } from "@iwsdk/core";
@@ -187,6 +188,72 @@ const createFloorGridTexture = (): CanvasTexture => {
   return new CanvasTexture(canvas);
 };
 
+const createGuideOverlay = (world: World): void => {
+  const overlay = document.createElement("div");
+  const panel = document.createElement("div");
+  const closeButton = document.createElement("button");
+  const guideImage = document.createElement("img");
+  let isClosed = false;
+
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.padding = "24px";
+  overlay.style.background = "rgba(15, 18, 26, 0.68)";
+  overlay.style.zIndex = "1000";
+
+  panel.style.position = "relative";
+  panel.style.width = "min(96vw, 1200px)";
+  panel.style.maxHeight = "96vh";
+  panel.style.borderRadius = "18px";
+  panel.style.overflow = "hidden";
+  panel.style.boxShadow = "0 24px 60px rgba(0, 0, 0, 0.35)";
+  panel.style.background = "#0f121a";
+
+  closeButton.type = "button";
+  closeButton.textContent = "Close";
+  closeButton.setAttribute("aria-label", "Close guide image");
+  closeButton.style.position = "absolute";
+  closeButton.style.top = "12px";
+  closeButton.style.right = "12px";
+  closeButton.style.border = "0";
+  closeButton.style.borderRadius = "999px";
+  closeButton.style.padding = "10px 14px";
+  closeButton.style.background = "rgba(15, 18, 26, 0.88)";
+  closeButton.style.color = "#f4efe6";
+  closeButton.style.cursor = "pointer";
+  closeButton.style.font = "600 14px/1 sans-serif";
+
+  guideImage.src = "/guide.png";
+  guideImage.alt = "Guide";
+  guideImage.style.display = "block";
+  guideImage.style.width = "100%";
+  guideImage.style.maxHeight = "96vh";
+  guideImage.style.objectFit = "contain";
+
+  closeButton.addEventListener("click", () => {
+    isClosed = true;
+    overlay.style.display = "none";
+  });
+
+  panel.append(guideImage, closeButton);
+  overlay.append(panel);
+  document.body.append(overlay);
+
+  const syncOverlayVisibility = (state: VisibilityState): void => {
+    const shouldShow = !isClosed && state === VisibilityState.NonImmersive;
+
+    overlay.style.display = shouldShow ? "flex" : "none";
+  };
+
+  syncOverlayVisibility(world.visibilityState.value);
+  world.visibilityState.subscribe((state) => {
+    syncOverlayVisibility(state);
+  });
+};
+
 const assets: AssetManifest = {
   model: {
     url: "./model.glb",
@@ -212,6 +279,8 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
   },
 }).then((world) => {
   const { camera } = world;
+
+  createGuideOverlay(world);
 
   camera.position.set(-4, 1.5, -6);
   camera.rotateY(-Math.PI * 0.75);
