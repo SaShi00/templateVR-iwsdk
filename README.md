@@ -22,18 +22,26 @@ This repo now includes a basic shared-room multiplayer implementation for:
 - shared arrow transform sync
 - per-object ownership so one user can hold the model and arrow at the same time
 
+### Install packages
+
+Install packages in a terminal:
+
+```bash
+npm install
+```
+
 ### Run locally
 
 Start the WebSocket relay in one terminal:
 
 ```bash
-npm run dev:server
+npm run server
 ```
 
 Start the Vite client in another terminal:
 
 ```bash
-npm run dev:client
+npm run dev
 ```
 
 The browser client connects to `/multiplayer`, and Vite proxies that secure WebSocket path to the local relay on port `8787`.
